@@ -6,7 +6,7 @@ breed [ companies company ] ;
 breed [ workers worker ] ;
 breed [ matching_agents matching_agent ] ;
 
-workers-own [ location salary skills mean_productivity employer ]
+workers-own [ location salary skills mean_productivity current_productivity employer ]
 companies-own [ location salary skills worker_list ]
 matching_agents-own [ worker_list company_hiring_list ]
 
@@ -71,10 +71,7 @@ to setup
 
     ;;register as job seeker to the matching agent
     let id who
-    ask the_matching_agent
-    [
-      set worker_list insert-item 0 worker_list id
-    ]
+    register_as_job_seeker id
   ]
 
   ;;jobs distribution
@@ -121,10 +118,7 @@ to setup
     let tmp_nb_job ( item i job_distrib ) - ( item ( i - 1 ) job_distrib )
     while [ j < ( item i job_distrib ) ]
     [
-      ask the_matching_agent
-      [
-        set company_hiring_list insert-item 0 company_hiring_list id
-      ]
+      add_a_job_offer id
       set j j + 1
     ]
     set i i + 1
@@ -134,9 +128,29 @@ to setup
   ]
 end
 
+to register_as_job_seeker [ id ]
+  ask the_matching_agent
+    [
+      set worker_list insert-item 0 worker_list id
+    ]
+end
+
+to add_a_job_offer [ id ]
+   ask the_matching_agent
+     [
+       set company_hiring_list insert-item 0 company_hiring_list id
+     ]
+end
+
 to simulate
   ;;matching
   do_matching
+
+  ;;workers
+  workers_action
+
+  ;;companies
+  companies_action
 
   ;;update env
   graphic_update
@@ -250,12 +264,50 @@ to hire [ worker_id company_id ]
 end
 
 to workers_action
+  ask workers [
+    if not ( employer = -1 ) [
+      ;; draw current productivity in [mean - fluctuation / 2 , mean + fluctuation / 2 ]
+      let tmp_prod ( mean_productivity + ( ( random-float max_product_fluctuation ) - ( max_product_fluctuation / 2 ) ) )
+      set tmp_prod min list tmp_prod 1
+      set tmp_prod max list tmp_prod 0
+      set current_productivity tmp_prod
+    ]
+  ]
 end
 
 to companies_action
+  ask companies [
+    let tmp_prod -1
+    let fired [ ]
+    ;;evaluate each employee productivity
+    foreach worker_list [
+      x -> let employee_id x
+      ask worker employee_id [
+        set tmp_prod current_productivity
+      ]
+      ;; if productivity too low, fire
+      if tmp_prod < firing_treshold [
+        fire employee_id
+        set fired insert-item 0 fired employee_id
+        ;;show ( word "fired " employee_id  " prod : " tmp_prod )
+      ]
+    ]
+
+    ;;remove fired from worker_list and create a new job offer
+    foreach fired [
+      x -> let employee_id x
+      set worker_list remove employee_id worker_list
+      add_a_job_offer who
+    ]
+  ]
 end
 
-to fire
+to fire [ employee_id ]
+  ask worker employee_id [
+    set color white
+    set employer -1
+    register_as_job_seeker who
+  ]
 end
 
 to graphic_update
@@ -565,7 +617,7 @@ SWITCH
 136
 display_links
 display_links
-1
+0
 1
 -1000
 
