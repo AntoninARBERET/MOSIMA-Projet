@@ -1,15 +1,21 @@
 ;;Global : U, V, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
-;;         display_links
+;;         display_links, salary_sigma, salary mean, sqrt_nb_locations, matches_by_round
 
-globals [ sqrt_nb_locations world_width world_height minimal_salary salary_mean salary_sigma the_matching_agent matches_by_round last_display_links color_set ]
-breed [ companies company ] ;
-breed [ workers worker ] ;
-breed [ matching_agents matching_agent ] ;
+globals [ world_width world_height minimal_salary the_matching_agent last_display_links color_set ]
 
-workers-own [ location salary skills mean_productivity current_productivity employer ]
-companies-own [ location salary skills worker_list ]
+;;workers
+breed [ workers worker ]
+workers-own [ location salary skills mean_productivity current_productivity unexpected_motivation employer ]
+
+;;companies
+breed [ companies company ]
+companies-own [ location salary skills unexpected_motivation worker_list ]
+
+;;matching agent
+breed [ matching_agents matching_agent ]
 matching_agents-own [ worker_list company_hiring_list ]
 
+;;set up the environment
 to setup
   clear-all
   reset-ticks
@@ -17,12 +23,9 @@ to setup
   set color_set [ 15 25 35 45 55 65 75 85 95 105 115 125 135 17 27 37 47 57 67 77 87 97 107 117 127 137 ]
 
   ;;global variables, may be passed as parameters later
-  set sqrt_nb_locations 4
   set world_width 100
   set world_height 100
   set minimal_salary 1171
-  set salary_mean 1800
-  set salary_sigma 400
   set matches_by_round 10
   ;;locations and links coloration
   ask patches [
@@ -48,6 +51,7 @@ to setup
     set color white
     set shape "person"
     set employer -1
+    set unexpected_motivation false
 
     ;;location
     let x random world_width
@@ -98,6 +102,7 @@ to setup
     set color item ( i mod ( length color_set ) ) color_set
     set shape "house"
     set worker_list [ ]
+    set unexpected_motivation false
 
     ;;location
     let x random world_width
@@ -128,40 +133,83 @@ to setup
   ]
 end
 
-to register_as_job_seeker [ id ]
-  ask the_matching_agent
-    [
-      set worker_list insert-item 0 worker_list id
-    ]
-end
-
-to add_a_job_offer [ id ]
-   ask the_matching_agent
-     [
-       set company_hiring_list insert-item 0 company_hiring_list id
-     ]
-end
-
+;;iteration of the simulation, can be see as day, week...
 to simulate
-  ;;matching
-  do_matching
-
   ;;workers
   workers_action
 
   ;;companies
   companies_action
 
+  ;;matching
+  do_matching
+
   ;;update env
   graphic_update
   tick
 end
 
-;;matching agent
+;;workers agent on an iteration
+to workers_action
+  ask workers [
+    ifelse not ( employer = -1 )
+    ;;employed
+    [
+      ;; draw current productivity in [mean - fluctuation / 2 , mean + fluctuation / 2 ]
+      let tmp_prod ( mean_productivity + ( ( random-float max_product_fluctuation ) - ( max_product_fluctuation / 2 ) ) )
+      set tmp_prod min list tmp_prod 1
+      set tmp_prod max list tmp_prod 0
+      set current_productivity tmp_prod
+    ]
+    ;;employed
+    [
+      ;;unexpected motivation this iteration
+      let unexp_motiv random-float 1
+      ifelse unexp_motiv < unexpected_worker_motivation [ set unexpected_motivation true ] [ set unexpected_motivation false ]
+
+    ]
+  ]
+end
+
+;;companies agent on an iteration
+to companies_action
+  ask companies [
+    let tmp_prod -1
+    let fired [ ]
+    ;;evaluate each employee productivity
+    foreach worker_list [
+      x -> let employee_id x
+      ask worker employee_id [
+        set tmp_prod current_productivity
+      ]
+      let unexp_fire random-float 1
+      ;; if productivity too low or unexpecti firing, fire
+      if tmp_prod < firing_treshold or unexp_fire < unexpected_firing [
+        fire employee_id
+        set fired insert-item 0 fired employee_id
+        ;;show ( word "fired " employee_id  " prod : " tmp_prod )
+      ]
+    ]
+
+    ;;remove fired from worker_list and create a new job offer
+    foreach fired [
+      x -> let employee_id x
+      set worker_list remove employee_id worker_list
+      add_a_job_offer who
+    ]
+
+    ;;unexpected motivation this iteration
+    let unexp_motiv random-float 1
+      ifelse unexp_motiv < unexpected_company_motivation [ set unexpected_motivation true ] [ set unexpected_motivation false ]
+  ]
+end
+
+;;matching agent on an iteration
 to do_matching
   repeat matches_by_round [ match ]
 end
 
+;;try to match a pair
 to match
   let company_id -1
   let worker_id -1
@@ -180,10 +228,16 @@ to match
     ]
   ]
 
-  ;;get distance
+  ;;get score
   if not ( company_id = -1 or worker_id = -1 )[
     set score calculate_score worker_id company_id
+
+    ;;get bonuses if unecpected motivation
+    ask worker worker_id [ if unexpected_motivation [ set score score + exceptional_matching_bonus ] ]
+    ask company company_id [ if unexpected_motivation [ set score score + exceptional_matching_bonus ] ]
   ]
+
+
 
   ;;if score is good enough, hire and remove form lists
   if score > quality_treshold [
@@ -196,6 +250,22 @@ to match
   ]
 
 
+end
+
+;;used by people to register to the matching agent
+to register_as_job_seeker [ id ]
+  ask the_matching_agent
+    [
+      set worker_list insert-item 0 worker_list id
+    ]
+end
+
+;;used by company to sent a job offer to the matching agent
+to add_a_job_offer [ id ]
+   ask the_matching_agent
+     [
+       set company_hiring_list insert-item 0 company_hiring_list id
+     ]
 end
 
 ;;score calculating function
@@ -263,53 +333,19 @@ to hire [ worker_id company_id ]
 
 end
 
-to workers_action
-  ask workers [
-    if not ( employer = -1 ) [
-      ;; draw current productivity in [mean - fluctuation / 2 , mean + fluctuation / 2 ]
-      let tmp_prod ( mean_productivity + ( ( random-float max_product_fluctuation ) - ( max_product_fluctuation / 2 ) ) )
-      set tmp_prod min list tmp_prod 1
-      set tmp_prod max list tmp_prod 0
-      set current_productivity tmp_prod
-    ]
-  ]
-end
-
-to companies_action
-  ask companies [
-    let tmp_prod -1
-    let fired [ ]
-    ;;evaluate each employee productivity
-    foreach worker_list [
-      x -> let employee_id x
-      ask worker employee_id [
-        set tmp_prod current_productivity
-      ]
-      ;; if productivity too low, fire
-      if tmp_prod < firing_treshold [
-        fire employee_id
-        set fired insert-item 0 fired employee_id
-        ;show ( word "fired " employee_id  " prod : " tmp_prod )
-      ]
-    ]
-
-    ;;remove fired from worker_list and create a new job offer
-    foreach fired [
-      x -> let employee_id x
-      set worker_list remove employee_id worker_list
-      add_a_job_offer who
-    ]
-  ]
-end
-
+;;notice the employee on firing
 to fire [ employee_id ]
   ask worker employee_id [
     set color white
     set employer -1
     register_as_job_seeker who
+    ask my-links [
+      die
+    ]
   ]
 end
 
+;;executed at each iteration for graphic purposes
 to graphic_update
   ;;on display_links change
   if  not last_display_links = display_links  [
@@ -332,13 +368,6 @@ to graphic_update
       ]
     ]
     set last_display_links display_links
-  ]
-end
-
-to test_stuff
-  show "test :"
-  ask company 217 [
-    show who
   ]
 end
 @#$#@#$#@
@@ -371,9 +400,9 @@ ticks
 
 SLIDER
 9
-83
-186
-116
+72
+188
+105
 U
 U
 0
@@ -386,9 +415,9 @@ HORIZONTAL
 
 SLIDER
 9
-130
+119
 187
-163
+152
 V
 V
 0
@@ -400,10 +429,10 @@ vacancy
 HORIZONTAL
 
 SLIDER
-18
-563
-190
-596
+14
+512
+248
+545
 quality_treshold
 quality_treshold
 0
@@ -415,25 +444,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-7
-287
-179
-320
+262
+212
+434
+245
 firing_treshold
 firing_treshold
 0
 1
-0.5
+0.01
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-8
-333
-180
-366
+263
+262
+434
+295
 unexpected_firing
 unexpected_firing
 0
@@ -445,10 +474,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-10
-472
-220
-505
+12
+406
+260
+439
 max_product_fluctuation
 max_product_fluctuation
 0
@@ -460,10 +489,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-7
-240
-269
-273
+10
+262
+248
+295
 unexpected_company_motivation
 unexpected_company_motivation
 0
@@ -475,10 +504,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-9
-425
-257
-458
+12
+357
+260
+390
 unexpected_worker_motivation
 unexpected_worker_motivation
 0
@@ -490,10 +519,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-14
-617
-249
-650
+13
+566
+248
+599
 exceptional_matching_bonus
 exceptional_matching_bonus
 0
@@ -508,47 +537,47 @@ TEXTBOX
 66
 39
 216
-64
+62
 Global
 20
 0.0
 1
 
 TEXTBOX
-42
-203
-192
-228
+43
+177
+193
+202
 Companies
 20
 0.0
 1
 
 TEXTBOX
-50
-391
-200
-416
+53
+323
+203
+348
 Workers\n
 20
 0.0
 1
 
 TEXTBOX
-21
-528
-223
-578
+20
+467
+222
+493
 Matching Agent\n
 20
 0.0
 1
 
 BUTTON
-592
-98
-658
-131
+667
+72
+733
+105
 Setup
 setup
 NIL
@@ -562,10 +591,10 @@ NIL
 1
 
 SLIDER
-232
-294
-478
-327
+10
+212
+248
+245
 nb_companies
 nb_companies
 0
@@ -577,27 +606,10 @@ companies
 HORIZONTAL
 
 BUTTON
-474
-467
-639
-500
-Sandbox to try things
-test_stuff
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-565
-243
-628
-276
+668
+119
+734
+152
 Run
 simulate
 T
@@ -611,15 +623,75 @@ NIL
 1
 
 SWITCH
-238
-103
-374
-136
+398
+119
+639
+152
 display_links
 display_links
-0
+1
 1
 -1000
+
+SLIDER
+398
+72
+639
+105
+sqrt_nb_locations
+sqrt_nb_locations
+1
+10
+4.0
+1
+1
+zone on each side
+HORIZONTAL
+
+SLIDER
+208
+119
+379
+152
+salary_mean
+salary_mean
+1171
+5000
+1800.0
+1
+1
+€
+HORIZONTAL
+
+SLIDER
+207
+72
+379
+105
+salary_sigma
+salary_sigma
+0
+2000
+400.0
+10
+1
+ €
+HORIZONTAL
+
+SLIDER
+262
+512
+530
+545
+matches_by_round
+matches_by_round
+0
+100
+10.0
+1
+1
+match/iteration
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
