@@ -1,6 +1,7 @@
 ;;Global : U, V, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
+;;         display_links
 
-globals [ sqrt_nb_locations world_width world_height minimal_salary salary_mean salary_sigma the_matching_agent matches_by_round ]
+globals [ sqrt_nb_locations world_width world_height minimal_salary salary_mean salary_sigma the_matching_agent matches_by_round last_display_links color_set ]
 breed [ companies company ] ;
 breed [ workers worker ] ;
 breed [ matching_agents matching_agent ] ;
@@ -11,7 +12,9 @@ matching_agents-own [ worker_list company_hiring_list ]
 
 to setup
   clear-all
-
+  reset-ticks
+  set last_display_links display_links
+  color_set [ 15 25 35 45 55 65 75 85 95 105 115 125 135 17 27 37 47 57 67 77 87 97 107 117 127 137 ]
 
   ;;global variables, may be passed as parameters later
   set sqrt_nb_locations 4
@@ -21,8 +24,7 @@ to setup
   set salary_mean 1800
   set salary_sigma 400
   set matches_by_round 10
-
-  ;;locations coloration
+  ;;locations and links coloration
   ask patches [
     let  col ceiling ( ( pycor + 1 )  / ( world_height / sqrt_nb_locations ) )
     let line ceiling ( ( pxcor + 1 ) / ( world_width / sqrt_nb_locations ) )
@@ -96,7 +98,7 @@ to setup
   create-companies nb_companies
   [
     ;;genral
-    set color red
+    set color item ( i mod ( length color_set ) ) c
     set shape "house"
     set worker_list [ ]
 
@@ -135,6 +137,9 @@ end
 to simulate
   ;;matching
   do_matching
+
+  ;;update env
+  graphic_update
   tick
 end
 
@@ -228,19 +233,54 @@ end
 
 ;;hiring worker in company
 to hire [ worker_id company_id ]
+  let company_col red
+  ask company company_id [
+    set worker_list insert-item 0 worker_list worker_id
+    set company_col color
+  ]
 
   ask worker worker_id
   [
     set employer company_id
-    set color red
+    set color company_col
+    if display_links [ create-link-to company employer [ set color company_col ] ]
   ]
 
-  ask company company_id [
-    set worker_list insert-item 0 worker_list worker_id
-  ]
+
 end
 
-to work
+to workers_action
+end
+
+to companies_action
+end
+
+to fire
+end
+
+to graphic_update
+  ;;on display_links change
+  if  not last_display_links = display_links  [
+
+    ifelse display_links
+    ;;changed from false to true
+    [
+      ask workers[
+        if not ( employer = -1 ) [
+          let company_col red
+          ask company employer [ set company_col color ]
+          create-link-to company employer [ set color company_col ]
+        ]
+      ]
+    ]
+    ;;changed from true to false
+    [
+      ask links [
+        die
+      ]
+    ]
+    set last_display_links display_links
+  ]
 end
 
 to test_stuff
@@ -271,8 +311,8 @@ GRAPHICS-WINDOW
 99
 0
 99
-0
-0
+1
+1
 1
 ticks
 30.0
@@ -517,6 +557,17 @@ NIL
 NIL
 NIL
 1
+
+SWITCH
+238
+103
+374
+136
+display_links
+display_links
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
