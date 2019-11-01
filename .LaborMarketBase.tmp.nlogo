@@ -1,6 +1,6 @@
 ;;Global : U, V, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
 
-globals [ sqrt_nb_locations world_width world_height minimal_salary salary_mean salary_sigma the_matching_agent ]
+globals [ sqrt_nb_locations world_width world_height minimal_salary salary_mean salary_sigma the_matching_agent matches_by_round ]
 breed [ companies company ] ;
 breed [ workers worker ] ;
 breed [ matching_agents matching_agent ] ;
@@ -12,6 +12,7 @@ matching_agents-own [ worker_list company_hiring_list ]
 to setup
   clear-all
 
+
   ;;global variables, may be passed as parameters later
   set sqrt_nb_locations 4
   set world_width 100
@@ -19,6 +20,7 @@ to setup
   set minimal_salary 1171
   set salary_mean 1800
   set salary_sigma 400
+  set matches_by_round 10
 
   ;;locations coloration
   ask patches [
@@ -60,9 +62,9 @@ to setup
     set salary tmp_salary
 
     ;;mean productivity
-    set mean_productivity = random-
+    set mean_productivity random-float 1
 
-    ;;
+    ;;employer
     set employer -1
 
     ;;register as job seeker to the matching agent
@@ -87,7 +89,6 @@ to setup
   set job_distrib sort job_distrib
   set job_distrib insert-item 0 job_distrib 0
   set job_distrib insert-item ( length job_distrib ) job_distrib ( V - 1 )
-  show job_distrib
 
   ;;companies init
   let i 1
@@ -95,8 +96,7 @@ to setup
   create-companies nb_companies
   [
     ;;genral
-    set size 3
-    set color green
+    set color red
     set shape "house"
     set worker_list [ ]
 
@@ -116,6 +116,7 @@ to setup
 
     ;;send job offers to the matching agents
     let id who
+    let tmp_nb_job ( item i job_distrib ) - ( item ( i - 1 ) job_distrib )
     while [ j < ( item i job_distrib ) ]
     [
       ask the_matching_agent
@@ -125,6 +126,127 @@ to setup
       set j j + 1
     ]
     set i i + 1
+
+    ;;set size depending on job number
+    set size 3 + 15 * tmp_nb_job / V
+  ]
+end
+
+to simulate
+  ;;matching
+  do_matching
+  tick
+end
+
+;;matching agent
+to do_matching
+  repeat matches_by_round [ match ]
+end
+
+to match
+  let company_id -1
+  let worker_id -1
+  let score -1
+
+  let worker_list_ind -1
+  let company_list_ind -1
+
+  ;;choose a pair
+  ask the_matching_agent [
+    if not ( empty? worker_list or empty? company_hiring_list ) [
+      set worker_list_ind random ( length worker_list )
+      set worker_id item ( worker_list_ind ) worker_list
+      set company_list_ind random ( length company_hiring_list )
+      set company_id item ( company_list_ind ) company_hiring_list
+    ]
+  ]
+
+  ;;get distance
+  if not ( company_id = -1 or worker_id = -1 )[
+    set score calculate_score worker_id company_id
+  ]
+
+  ;;if score is good enough, hire and remove form lists
+  if score > quality_treshold [
+    hire worker_id company_id
+    ask the_matching_agent
+    [
+      set worker_list remove-item worker_list_ind worker_list
+      set company_hiring_list remove-item company_list_ind company_hiring_list
+    ]
+  ]
+
+
+end
+
+;;score calculating function
+to-report calculate_score [ worker_id company_id ]
+  ;;get values
+  let worker_loc -1
+  let worker_skills [ ]
+  let worker_salary -1
+
+  let company_loc -1
+  let company_skills [ ]
+  let company_salary -1
+
+  ask worker worker_id[
+    set worker_loc location
+    set worker_skills skills
+    set worker_salary salary
+  ]
+
+  ask company company_id[
+    set company_loc location
+    set company_skills skills
+    set company_salary salary
+  ]
+
+  ;;scores
+  let dist_score 0
+  let skills_score 0
+  let salary_score 0
+
+  ;;calculate location score
+  if company_loc = worker_loc [ set dist_score 1 ]
+
+  ;;calculate skills score
+  let i 0
+  while [ i < 5 ][
+    if item i worker_skills = item i company_skills [ set skills_score skills_score + 0.2 ]
+    set i i + 1
+  ]
+
+  ;;calculate salary score
+  let tmp_sal_score ( 1 - ( ( worker_salary - company_salary ) /  max list worker_salary company_salary  ) )
+  set salary_score min list 1 tmp_sal_score
+
+  ;;aggregate
+  report ( dist_score + skills_score + salary_score ) / 3
+
+end
+
+;;hiring worker in company
+to hire [ worker_id company_id ]
+
+  ask worker worker_id
+  [
+    set employer company_id
+    set color red
+  ]
+
+  ask company company_id [
+    set worker_list insert-item 0 worker_list worker_id
+  ]
+end
+
+to work
+end
+
+to test_stuff
+  show "test :"
+  ask company 217 [
+    show who
   ]
 end
 @#$#@#$#@
@@ -361,6 +483,40 @@ nb_companies
 1
 companies
 HORIZONTAL
+
+BUTTON
+474
+467
+639
+500
+Sandbox to try things
+test_stuff
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+565
+243
+628
+276
+Run
+simulate
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
