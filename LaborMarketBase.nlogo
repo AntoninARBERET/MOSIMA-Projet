@@ -679,10 +679,10 @@ salary_sigma
 HORIZONTAL
 
 SLIDER
-262
-512
-530
-545
+14
+616
+250
+649
 matches_by_round
 matches_by_round
 0

@@ -452,7 +452,7 @@ firing_treshold
 firing_treshold
 0
 1
-0.01
+0.5
 0.01
 1
 NIL
@@ -679,10 +679,10 @@ salary_sigma
 HORIZONTAL
 
 SLIDER
-262
-512
-530
-545
+14
+616
+282
+649
 matches_by_round
 matches_by_round
 0
