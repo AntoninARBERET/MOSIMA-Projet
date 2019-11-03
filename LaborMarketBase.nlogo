@@ -1,7 +1,7 @@
-;;Global : U, V, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
+;;Global : U_init, V_init, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
 ;;         display_links, salary_sigma, salary mean, sqrt_nb_locations, matches_by_round
 
-globals [ world_width world_height minimal_salary the_matching_agent last_display_links color_set ]
+globals [ world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L u_rate v_rate V_last_values U_last_values state_description ]
 
 ;;workers
 breed [ workers worker ]
@@ -22,11 +22,21 @@ to setup
   set last_display_links display_links
   set color_set [ 15 25 35 45 55 65 75 85 95 105 115 125 135 17 27 37 47 57 67 77 87 97 107 117 127 137 ]
 
-  ;;global variables, may be passed as parameters later
+  ;;global variables
   set world_width 100
   set world_height 100
   set minimal_salary 1171
   set matches_by_round 10
+  set U U_init
+  set V V_init
+  set L U_init
+  set u_rate U / L
+  set v_rate V / L
+  ;;last values, used for convergence
+  set U_last_values [ ]
+  set V_last_values [ ]
+  set state_description "Waiting start"
+
   ;;locations and links coloration
   ask patches [
     let  col ceiling ( ( pycor + 1 )  / ( world_height / sqrt_nb_locations ) )
@@ -44,7 +54,7 @@ to setup
   set the_matching_agent matching_agent 0
 
   ;;workers init
-  create-workers U
+  create-workers U_init
   [
     ;;genral
     set size 3
@@ -85,13 +95,13 @@ to setup
     let val -1
     while [ val < 0 or member? val job_distrib ]
     [
-      set val ( random V - 2 ) + 1
+      set val ( random V_init - 2 ) + 1
     ]
     set job_distrib insert-item 0 job_distrib val
   ]
   set job_distrib sort job_distrib
   set job_distrib insert-item 0 job_distrib 0
-  set job_distrib insert-item ( length job_distrib ) job_distrib ( V - 1 )
+  set job_distrib insert-item ( length job_distrib ) job_distrib ( V_init - 1 )
 
   ;;companies init
   let i 1
@@ -129,7 +139,7 @@ to setup
     set i i + 1
 
     ;;set size depending on job number
-    set size 3 + 15 * tmp_nb_job / V
+    set size 3 + 15 * tmp_nb_job / V_init
   ]
 end
 
@@ -145,8 +155,10 @@ to simulate
   do_matching
 
   ;;update env
+  values_update
   graphic_update
   tick
+  if check_conv [ stop ]
 end
 
 ;;workers agent on an iteration
@@ -345,8 +357,64 @@ to fire [ employee_id ]
   ]
 end
 
+to values_update
+  ask the_matching_agent [
+    set U length worker_list
+    set V length company_hiring_list
+    set u_rate U / L
+    set v_rate V / L
+
+    set U_last_values insert-item 0 U_last_values u_rate
+    if length U_last_values > nb_value_conv [
+      set U_last_values remove-item ( (length U_last_values) - 1 ) U_last_values
+    ]
+
+    set V_last_values insert-item 0 V_last_values v_rate
+    if length V_last_values > nb_value_conv [
+      set V_last_values remove-item ( (length V_last_values) - 1 ) V_last_values
+    ]
+  ]
+end
+
+
+to-report check_conv
+  if length U_last_values < nb_value_conv or length V_last_values < nb_value_conv  [report false]
+  let i 0
+  let U_mean1 0
+  let U_mean2 0
+  let V_mean1 0
+  let V_mean2 0
+
+  repeat nb_value_conv [
+    ifelse i < nb_value_conv / 2 [
+      set U_mean1 U_mean1 + item i U_last_values
+      set V_mean1 V_mean1 + item i V_last_values
+    ]
+    [
+      set U_mean2 U_mean2 + item i U_last_values
+      set V_mean2 V_mean2 + item i V_last_values
+    ]
+    set i i + 1
+  ]
+
+  set U_mean1 U_mean1 / ( nb_value_conv * 2 )
+  set U_mean2 U_mean2 / ( nb_value_conv * 2 )
+  set V_mean1 V_mean1 / ( nb_value_conv * 2 )
+  set V_mean2 V_mean2 / ( nb_value_conv * 2 )
+
+  ifelse ( abs ( U_mean1 - U_mean2 ) < epsilon_conv and abs ( V_mean1 - V_mean2 ) < epsilon_conv ) [
+    set state_description (word "Converged : mean u = " precision U_mean2 3 ", mean v = " precision V_mean2 3)
+    report true
+
+  ]
+  [report false]
+end
+
+
 ;;executed at each iteration for graphic purposes
 to graphic_update
+  set state_description "Running"
+
   ;;on display_links change
   if  not last_display_links = display_links  [
 
@@ -369,6 +437,10 @@ to graphic_update
     ]
     set last_display_links display_links
   ]
+end
+
+to plot_curve
+  plotxy 5 5
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -403,8 +475,8 @@ SLIDER
 72
 188
 105
-U
-U
+U_init
+U_init
 0
 400
 200.0
@@ -418,8 +490,8 @@ SLIDER
 119
 187
 152
-V
-V
+V_init
+V_init
 0
 400
 200.0
@@ -429,15 +501,30 @@ vacancy
 HORIZONTAL
 
 SLIDER
-14
-512
-248
-545
+13
+598
+247
+631
 quality_treshold
 quality_treshold
 0
 1
-0.5
+0.4
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+261
+298
+433
+331
+firing_treshold
+firing_treshold
+0
+1
+0.08
 0.01
 1
 NIL
@@ -445,39 +532,24 @@ HORIZONTAL
 
 SLIDER
 262
-212
-434
-245
-firing_treshold
-firing_treshold
+348
+433
+381
+unexpected_firing
+unexpected_firing
 0
 1
-0.5
+0.05
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-263
-262
-434
-295
-unexpected_firing
-unexpected_firing
-0
-1
-0.1
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-12
-406
-260
-439
+11
+492
+259
+525
 max_product_fluctuation
 max_product_fluctuation
 0
@@ -489,12 +561,27 @@ NIL
 HORIZONTAL
 
 SLIDER
-10
-262
-248
-295
+9
+348
+247
+381
 unexpected_company_motivation
 unexpected_company_motivation
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+11
+443
+259
+476
+unexpected_worker_motivation
+unexpected_worker_motivation
 0
 1
 0.1
@@ -505,24 +592,9 @@ HORIZONTAL
 
 SLIDER
 12
-357
-260
-390
-unexpected_worker_motivation
-unexpected_worker_motivation
-0
-1
-0.1
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-13
-566
-248
-599
+652
+247
+685
 exceptional_matching_bonus
 exceptional_matching_bonus
 0
@@ -544,30 +616,30 @@ Global
 1
 
 TEXTBOX
-43
-177
-193
-202
+42
+263
+192
+288
 Companies
 20
 0.0
 1
 
 TEXTBOX
-53
-323
-203
-348
+52
+409
+202
+434
 Workers\n
 20
 0.0
 1
 
 TEXTBOX
-20
-467
-222
-493
+19
+553
+221
+579
 Matching Agent\n
 20
 0.0
@@ -591,10 +663,10 @@ NIL
 1
 
 SLIDER
-10
-212
-248
-245
+9
+298
+247
+331
 nb_companies
 nb_companies
 0
@@ -629,7 +701,7 @@ SWITCH
 152
 display_links
 display_links
-1
+0
 1
 -1000
 
@@ -679,10 +751,10 @@ salary_sigma
 HORIZONTAL
 
 SLIDER
-14
-616
-250
-649
+13
+702
+249
+735
 matches_by_round
 matches_by_round
 0
@@ -692,6 +764,84 @@ matches_by_round
 1
 match/iteration
 HORIZONTAL
+
+PLOT
+277
+443
+754
+609
+u & v through time
+ticks
+person & job offers
+0.0
+10.0
+0.0
+1.0
+true
+true
+"" ""
+PENS
+"u" 1.0 0 -13345367 true "" "plot u_rate"
+"v" 1.0 0 -2674135 true "" "plot v_rate"
+
+PLOT
+362
+616
+632
+804
+plot 1
+u
+v
+0.0
+1.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 2 -16777216 true "" "plot_curve"
+
+SLIDER
+98
+207
+270
+240
+epsilon_conv
+epsilon_conv
+0
+1
+0.01
+0.001
+1
+NIL
+HORIZONTAL
+
+SLIDER
+344
+229
+516
+262
+nb_value_conv
+nb_value_conv
+2
+100
+20.0
+2
+1
+NIL
+HORIZONTAL
+
+MONITOR
+514
+320
+757
+365
+State :
+state_description
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1035,7 +1185,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
