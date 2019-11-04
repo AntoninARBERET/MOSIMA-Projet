@@ -1,7 +1,7 @@
 ;;Global : U_init, V_init, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
 ;;         display_links, salary_sigma, salary mean, sqrt_nb_locations, matches_by_round
 
-globals [ world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L u_rate v_rate V_last_values U_last_values state_description ]
+globals [ world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating ]
 
 ;;workers
 breed [ workers worker ]
@@ -17,8 +17,13 @@ matching_agents-own [ worker_list company_hiring_list ]
 
 ;;set up the environment
 to setup
+  let tmp_u u_at_conv
+  let tmp_v v_at_conv
   clear-all
   reset-ticks
+  set u_at_conv tmp_u
+  set v_at_conv tmp_v
+  plot_curve
   set last_display_links display_links
   set color_set [ 15 25 35 45 55 65 75 85 95 105 115 125 135 17 27 37 47 57 67 77 87 97 107 117 127 137 ]
 
@@ -36,6 +41,11 @@ to setup
   set U_last_values [ ]
   set V_last_values [ ]
   set state_description "Waiting start"
+
+  if u_at_conv = 0 and v_at_conv = 0 [
+    set u_at_conv []
+    set v_at_conv []
+  ]
 
   ;;locations and links coloration
   ask patches [
@@ -158,7 +168,31 @@ to simulate
   values_update
   graphic_update
   tick
-  if check_conv [ stop ]
+  if check_conv [
+    set u_at_conv insert-item 0 u_at_conv u_rate
+    set v_at_conv insert-item 0 v_at_conv v_rate
+    plot_curve
+    set is_simulating false
+    stop
+
+  ]
+end
+
+to get_beveridge_curve
+  reset_curve
+  let u_init_value [ 100 200 300 400 ]
+  let v_init_value [ 100 200 300 400 ]
+  foreach u_init_value [
+    x ->
+    foreach v_init_value [
+      y ->
+      setup
+      set U_init x
+      set V_init y
+      set is_simulating true
+      while [ is_simulating ] [ simulate ]
+    ]
+  ]
 end
 
 ;;workers agent on an iteration
@@ -403,7 +437,7 @@ to-report check_conv
   set V_mean2 V_mean2 / ( nb_value_conv * 2 )
 
   ifelse ( abs ( U_mean1 - U_mean2 ) < epsilon_conv and abs ( V_mean1 - V_mean2 ) < epsilon_conv ) [
-    set state_description (word "Converged : mean u = " precision U_mean2  ", mean v = " precision V_mean2 6)
+    set state_description (word "Converged : mean u = " precision U_mean2 3 ", mean v = " precision V_mean2 3)
     report true
 
   ]
@@ -440,17 +474,30 @@ to graphic_update
 end
 
 to plot_curve
-  plotxy 5 5
+  if not ( u_at_conv = 0 ) [
+    let i 0
+    repeat length u_at_conv [
+      plotxy item i u_at_conv item i v_at_conv
+      set i i + 1
+    ]
+  ]
+end
+
+to reset_curve
+  set u_at_conv []
+  set v_at_conv []
+  plot_curve
+  clear-plot
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-767
-14
-1408
-656
+819
+23
+1358
+563
 -1
 -1
-6.33
+5.31
 1
 10
 1
@@ -477,9 +524,9 @@ SLIDER
 105
 U_init
 U_init
-0
+50
 400
-200.0
+400.0
 50
 1
 unemployed
@@ -492,9 +539,9 @@ SLIDER
 152
 V_init
 V_init
-0
+50
 400
-200.0
+400.0
 50
 1
 vacancy
@@ -524,7 +571,7 @@ firing_treshold
 firing_treshold
 0
 1
-0.08
+0.23
 0.01
 1
 NIL
@@ -539,7 +586,7 @@ unexpected_firing
 unexpected_firing
 0
 1
-0.05
+0.0
 0.01
 1
 NIL
@@ -554,7 +601,7 @@ max_product_fluctuation
 max_product_fluctuation
 0
 1
-0.3
+0.35
 0.01
 1
 NIL
@@ -584,7 +631,7 @@ unexpected_worker_motivation
 unexpected_worker_motivation
 0
 1
-0.1
+0.11
 0.01
 1
 NIL
@@ -671,7 +718,7 @@ nb_companies
 nb_companies
 0
 100
-20.0
+39.0
 1
 1
 companies
@@ -766,10 +813,10 @@ match/iteration
 HORIZONTAL
 
 PLOT
-277
-443
-754
-609
+821
+577
+1082
+697
 u & v through time
 ticks
 person & job offers
@@ -785,11 +832,11 @@ PENS
 "v" 1.0 0 -2674135 true "" "plot v_rate"
 
 PLOT
-362
-616
-632
-804
-plot 1
+339
+407
+765
+654
+Beveridge Curve
 u
 v
 0.0
@@ -798,7 +845,7 @@ v
 1.0
 true
 false
-"" ""
+"" "plot_curve"
 PENS
 "default" 1.0 2 -16777216 true "" "plot_curve"
 
@@ -811,7 +858,7 @@ epsilon_conv
 epsilon_conv
 0
 1
-0.01
+0.095
 0.001
 1
 NIL
@@ -826,22 +873,56 @@ nb_value_conv
 nb_value_conv
 2
 100
-20.0
+100.0
 2
 1
 NIL
 HORIZONTAL
 
 MONITOR
-473
-313
-752
-358
+1091
+576
+1357
+621
 State :
 state_description
 17
 1
 11
+
+BUTTON
+673
+353
+776
+386
+Reset curve
+reset_curve
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+489
+351
+650
+384
+NIL
+get_beveridge_curve
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1185,7 +1266,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.1
+NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
