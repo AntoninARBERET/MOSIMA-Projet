@@ -1,7 +1,7 @@
 ;;Global : U_init, V_init, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
 ;;         display_links, salary_sigma, salary mean, sqrt_nb_locations, matches_by_round
 
-globals [ world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating nb_companies]
+globals [ world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating nb_fired nb_hired fire_rate hire_rate ]
 
 ;;workers
 breed [ workers worker ]
@@ -17,14 +17,13 @@ matching_agents-own [ worker_list company_hiring_list ]
 
 ;;set up the environment
 to setup
-
   let tmp_u u_at_conv
   let tmp_v v_at_conv
   clear-all
   reset-ticks
   set u_at_conv tmp_u
   set v_at_conv tmp_v
-  plot_curve
+  beveridge_update
   set last_display_links display_links
   set color_set [ 15 25 35 45 55 65 75 85 95 105 115 125 135 17 27 37 47 57 67 77 87 97 107 117 127 137 ]
 
@@ -38,11 +37,14 @@ to setup
   set L U_init
   set u_rate U / L
   set v_rate V / L
-  set nb_companies V_init
   ;;last values, used for convergence
   set U_last_values [ ]
   set V_last_values [ ]
   set state_description "Waiting start"
+  set nb_hired 0
+  set nb_fired 0
+  set fire_rate 0
+  set hire_rate 0
 
   if u_at_conv = 0 and v_at_conv = 0 [
     set u_at_conv []
@@ -100,8 +102,24 @@ to setup
     register_as_job_seeker id
   ]
 
+  ;;jobs distribution
+  let job_distrib [ ]
+  while [ ( length job_distrib ) < ( nb_companies - 1 ) ]
+  [
+    let val -1
+    while [ val < 0 or member? val job_distrib ]
+    [
+      set val ( random V_init - 2 ) + 1
+    ]
+    set job_distrib insert-item 0 job_distrib val
+  ]
+  set job_distrib sort job_distrib
+  set job_distrib insert-item 0 job_distrib 0
+  set job_distrib insert-item ( length job_distrib ) job_distrib ( V_init - 1 )
+
   ;;companies init
   let i 1
+  let j 0
   create-companies nb_companies
   [
     ;;genral
@@ -126,12 +144,18 @@ to setup
 
     ;;send job offers to the matching agents
     let id who
-    add_a_job_offer id
+    let tmp_nb_job ( item i job_distrib ) - ( item ( i - 1 ) job_distrib )
+    while [ j < ( item i job_distrib ) ]
+    [
+      add_a_job_offer id
+      set j j + 1
+    ]
     set i i + 1
 
     ;;set size depending on job number
-    set size 3
+    set size 3 + 15 * tmp_nb_job / V_init
   ]
+
 end
 
 ;;iteration of the simulation, can be see as day, week...
@@ -149,10 +173,10 @@ to simulate
   values_update
   graphic_update
   tick
-  if check_conv [
+  if check_conv and stop_on_conv[
     set u_at_conv insert-item 0 u_at_conv u_rate
     set v_at_conv insert-item 0 v_at_conv v_rate
-    plot_curve
+    beveridge_update
     set is_simulating false
     stop
 
@@ -344,6 +368,7 @@ end
 
 ;;hiring worker in company
 to hire [ worker_id company_id ]
+  set nb_hired nb_hired + 1
   let company_col red
   ask company company_id [
     set worker_list insert-item 0 worker_list worker_id
@@ -362,6 +387,7 @@ end
 
 ;;notice the employee on firing
 to fire [ employee_id ]
+  set nb_fired nb_fired + 1
   ask worker employee_id [
     set color white
     set employer -1
@@ -373,6 +399,10 @@ to fire [ employee_id ]
 end
 
 to values_update
+  ifelse ( L - U ) = 0 [ set  fire_rate 0 ] [ set fire_rate ( nb_fired / ( L - U ) ) ]
+  ifelse ( U = 0 ) [set hire_rate 0 ] [set hire_rate ( nb_hired / U )]
+  set nb_fired 0
+  set nb_hired 0
   ask the_matching_agent [
     set U length worker_list
     set V length company_hiring_list
@@ -464,11 +494,15 @@ to plot_curve
   ]
 end
 
+to beveridge_update
+;;just called to update
+end
+
 to reset_curve
   set u_at_conv []
   set v_at_conv []
-  plot_curve
-  clear-plot
+  beveridge_update
+  clear-all-plots
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -499,31 +533,31 @@ ticks
 30.0
 
 SLIDER
-6
-43
-159
-76
+9
+72
+188
+105
 U_init
 U_init
-50
+100
 400
 400.0
-50
+100
 1
 unemployed
 HORIZONTAL
 
 SLIDER
-6
-82
-159
-115
+9
+119
+187
+152
 V_init
 V_init
-50
+100
 400
 400.0
-50
+100
 1
 vacancy
 HORIZONTAL
@@ -537,7 +571,7 @@ quality_treshold
 quality_treshold
 0
 1
-0.4
+0.3
 0.01
 1
 NIL
@@ -552,7 +586,7 @@ firing_treshold
 firing_treshold
 0
 1
-0.94
+0.29
 0.01
 1
 NIL
@@ -567,7 +601,7 @@ unexpected_firing
 unexpected_firing
 0
 1
-0.0
+0.24
 0.01
 1
 NIL
@@ -582,7 +616,7 @@ max_product_fluctuation
 max_product_fluctuation
 0
 1
-0.35
+0.3
 0.01
 1
 NIL
@@ -612,7 +646,7 @@ unexpected_worker_motivation
 unexpected_worker_motivation
 0
 1
-0.11
+0.17
 0.01
 1
 NIL
@@ -634,10 +668,10 @@ NIL
 HORIZONTAL
 
 TEXTBOX
-200
-10
-350
-33
+66
+39
+216
+62
 Global
 20
 0.0
@@ -690,11 +724,26 @@ NIL
 NIL
 1
 
+SLIDER
+9
+298
+247
+331
+nb_companies
+nb_companies
+0
+100
+16.0
+1
+1
+companies
+HORIZONTAL
+
 BUTTON
-668
-119
-734
-152
+670
+243
+736
+276
 Run
 simulate
 T
@@ -708,10 +757,10 @@ NIL
 1
 
 SWITCH
-261
-124
-483
-157
+398
+119
+639
+152
 display_links
 display_links
 0
@@ -719,10 +768,10 @@ display_links
 -1000
 
 SLIDER
-6
-123
-252
-156
+398
+72
+639
+105
 sqrt_nb_locations
 sqrt_nb_locations
 1
@@ -734,30 +783,30 @@ zone on each side
 HORIZONTAL
 
 SLIDER
-167
-83
-320
-116
+208
+119
+379
+152
 salary_mean
 salary_mean
 1171
 5000
-1800.0
+1891.0
 1
 1
 €
 HORIZONTAL
 
 SLIDER
-167
-43
-320
-76
+207
+72
+379
+105
 salary_sigma
 salary_sigma
 0
 2000
-410.0
+400.0
 10
 1
  €
@@ -805,36 +854,36 @@ PLOT
 Beveridge Curve
 u
 v
-0.0
+0.5
 1.0
 0.0
 1.0
 true
 false
-"" "plot_curve"
+"" "beveridge_update"
 PENS
 "default" 1.0 2 -16777216 true "" "plot_curve"
 
 SLIDER
-328
-83
-481
-116
+69
+167
+241
+200
 epsilon_conv
 epsilon_conv
 0
 1
-0.096
+0.095
 0.001
 1
 NIL
 HORIZONTAL
 
 SLIDER
-327
-43
+308
+166
 480
-76
+199
 nb_value_conv
 nb_value_conv
 2
@@ -889,6 +938,36 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+1090
+627
+1430
+825
+Fire & hire rates
+ticks
+rates
+0.0
+10.0
+0.0
+0.2
+true
+true
+"" ""
+PENS
+"hire rate" 1.0 0 -2674135 true "" "plot hire_rate"
+"fire rate" 1.0 0 -13345367 true "" "plot fire_rate"
+
+SWITCH
+514
+178
+658
+211
+stop_on_conv
+stop_on_conv
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?

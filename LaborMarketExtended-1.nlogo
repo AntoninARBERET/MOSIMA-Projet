@@ -9,7 +9,7 @@ workers-own [ location salary skills mean_productivity current_productivity unex
 
 ;;companies
 breed [ companies company ]
-companies-own [ location salary skills unexpected_motivation worker_list ]
+companies-own [ location salary skills unexpected_motivation mean_atmosphere current_atmosphere worker_list ]
 
 ;;matching agent
 breed [ matching_agents matching_agent ]
@@ -138,6 +138,9 @@ to setup
     if val < minimal_salary [ set val  minimal_salary]
     set salary val
 
+    ;;mean atmosphere
+    set mean_atmosphere random-float 1
+
     ;;send job offers to the matching agents
     let id who
     let tmp_nb_job ( item i job_distrib ) - ( item ( i - 1 ) job_distrib )
@@ -206,8 +209,22 @@ to workers_action
       set tmp_prod min list tmp_prod 1
       set tmp_prod max list tmp_prod 0
       set current_productivity tmp_prod
+
+      ;;evaluate employer atmosphere
+      let tmp_atmos -1
+      ask company employer [
+        set tmp_atmos current_atmosphere
+      ]
+      let unexp_quit random-float 1
+      ;; if productivity too low or unexpecti firing, fire
+      if tmp_atmos < quitting_treshold or unexp_quit < unexpected_quitting [
+        fire who
+
+        ;;show ( word "quit " who  " prod : " tmp_prod )
+
+      ]
     ]
-    ;;employed
+    ;;unemployed
     [
       ;;unexpected motivation this iteration
       let unexp_motiv random-float 1
@@ -222,6 +239,13 @@ to companies_action
   ask companies [
     let tmp_prod -1
     let fired [ ]
+
+     ;; draw current atmosphere in [mean - fluctuation / 2 , mean + fluctuation / 2 ]
+      let tmp_atmos ( atmosphere + ( ( random-float max_atmosphere_fluctuation ) - ( max_atmosphere_fluctuation / 2 ) ) )
+      set tmp_atmos min list tmp_atmos 1
+      set tmp_atmos max list tmp_atmos 0
+      set current_atmosphere tmp_atmos
+
     ;;evaluate each employee productivity
     foreach worker_list [
       x -> let employee_id x
@@ -616,7 +640,7 @@ unexpected_company_motivation
 unexpected_company_motivation
 0
 1
-0.1
+0.42
 0.01
 1
 NIL
@@ -923,6 +947,21 @@ NIL
 NIL
 NIL
 1
+
+SLIDER
+164
+524
+336
+557
+quitting_treshold
+quitting_treshold
+0
+1
+0.5
+0.01
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
