@@ -1,7 +1,7 @@
 ;;Global : U_init, V_init, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
-;;         display_links, salary_sigma, salary mean, sqrt_nb_locations, matches_by_round
+;;         display_links, max_salary_difference, salary mean, sqrt_nb_locations, matches_by_round
 
-globals [ world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L nb_companies u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating nb_fired nb_hired fire_rate hire_rate ]
+globals [  nb_value_conv world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L nb_companies u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating nb_fired nb_hired fire_rate hire_rate ]
 
 ;;workers
 breed [ workers worker ]
@@ -21,6 +21,7 @@ to setup
   let tmp_v v_at_conv
   clear-all
   reset-ticks
+  set nb_value_conv
   set u_at_conv tmp_u
   set v_at_conv tmp_v
   beveridge_update
@@ -88,7 +89,7 @@ to setup
     set skills ( list random 2 random 2 random 2 random 2 random 2 )
 
     ;;salary
-    let tmp_salary floor ( random-normal salary_mean salary_sigma )
+    let tmp_salary ( salary_mean - max_salary_difference / 2 + ( random max_salary_difference ) )
     if tmp_salary < minimal_salary [ set tmp_salary  minimal_salary]
     set salary tmp_salary
 
@@ -123,7 +124,7 @@ to setup
     set skills ( list random 2 random 2 random 2 random 2 random 2 )
 
     ;;salary
-    let val floor ( random-normal salary_mean salary_sigma )
+    let val ( salary_mean - max_salary_difference / 2 + ( random max_salary_difference ) )
     if val < minimal_salary [ set val  minimal_salary]
     set salary val
 
@@ -764,10 +765,10 @@ HORIZONTAL
 SLIDER
 158
 43
-310
+355
 76
-salary_sigma
-salary_sigma
+max_salary_difference
+max_salary_difference
 0
 2000
 400.0
@@ -785,7 +786,7 @@ matches_by_round
 matches_by_round
 0
 100
-10.0
+1.0
 1
 1
 match/iteration
@@ -837,23 +838,8 @@ epsilon_conv
 epsilon_conv
 0
 1
-0.01
+0.007
 0.001
-1
-NIL
-HORIZONTAL
-
-SLIDER
-158
-129
-310
-162
-nb_value_conv
-nb_value_conv
-2
-100
-50.0
-2
 1
 NIL
 HORIZONTAL
@@ -1305,7 +1291,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.1
+NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
