@@ -89,7 +89,6 @@ to setup
     let tmp_main_skill random 3
     set skills ( list 0 0 0 random 2 random 2 )
     set skills replace-item tmp_main_skill skills 1
-    show skills
 
     ;;salary
     let tmp_salary ( salary_mean - max_salary_difference / 2 + ( random max_salary_difference ) )
@@ -405,7 +404,7 @@ end
 ;;hiring worker in company
 to hire [ worker_id company_id ]
   set nb_hired nb_hired + 1
-  let  red
+  let company_skill -1
   ask company company_id [
     set worker_list insert-item 0 worker_list worker_id
     set company_skill main_skill
@@ -650,7 +649,7 @@ firing_treshold
 firing_treshold
 0
 1
-0.5
+0.49
 0.01
 1
 NIL
@@ -1087,7 +1086,7 @@ SLIDER
 nb_companies
 nb_companies
 1
-100
+V_0
 22.0
 1
 1

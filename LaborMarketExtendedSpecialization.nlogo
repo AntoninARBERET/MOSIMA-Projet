@@ -649,7 +649,7 @@ firing_treshold
 firing_treshold
 0
 1
-0.5
+0.66
 0.01
 1
 NIL
@@ -664,7 +664,7 @@ unexpected_firing
 unexpected_firing
 0
 1
-0.1
+0.11
 0.01
 1
 NIL
@@ -1042,7 +1042,7 @@ max_atmosphere_fluctuation
 max_atmosphere_fluctuation
 0
 1
-0.3
+0.29
 0.01
 1
 NIL
@@ -1086,8 +1086,8 @@ SLIDER
 nb_companies
 nb_companies
 1
-100
-22.0
+V_init
+11.0
 1
 1
 NIL
