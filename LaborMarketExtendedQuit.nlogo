@@ -1,7 +1,8 @@
 ;;Global : U_init, V_init, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
 ;;         display_links, max_salary_difference, salary mean, sqrt_nb_locations, matches_by_round
 
-globals [  nb_value_conv world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L nb_companies u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating nb_fired nb_hired fire_rate hire_rate ]
+globals [  nb_value_conv world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L nb_companies u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating
+  nb_fired nb_hired nb_quitted fire_rate hire_rate quit_rate]
 
 ;;workers
 breed [ workers worker ]
@@ -9,7 +10,7 @@ workers-own [ location salary skills mean_productivity current_productivity unex
 
 ;;companies
 breed [ companies company ]
-companies-own [ location salary skills unexpected_motivation worker_list ]
+companies-own [ location salary skills unexpected_motivation worker_list mean_atmosphere current_atmosphere ]
 
 ;;matching agent
 breed [ matching_agents matching_agent ]
@@ -21,7 +22,7 @@ to setup
   let tmp_v v_at_conv
   clear-all
   reset-ticks
-  set nb_value_conv
+  set nb_value_conv 50
   set u_at_conv tmp_u
   set v_at_conv tmp_v
   beveridge_update
@@ -128,6 +129,9 @@ to setup
     if val < minimal_salary [ set val  minimal_salary]
     set salary val
 
+    ;;mean atmosphere
+    set mean_atmosphere random-float 1
+
     ;;send job offer to the matching agents
     add_a_job_offer who
 
@@ -191,8 +195,22 @@ to workers_action
       set tmp_prod min list tmp_prod 1
       set tmp_prod max list tmp_prod 0
       set current_productivity tmp_prod
+
+      let tmp_atmos 0
+      ask company employer [
+        set tmp_atmos current_atmosphere
+      ]
+      let unexp_quit random-float 1
+      ;; if amtmosphere too low or unexpected quit, quit
+      if tmp_atmos < quitting_treshold or unexp_quit < unexpected_quitting [
+        quit who employer
+        set employer -1
+        register_as_job_seeker who
+        ;;show ( word "fired " employee_id  " prod : " tmp_prod )
+      ]
+
     ]
-    ;;employed
+    ;;unemployed
     [
       ;;unexpected motivation this iteration
       let unexp_motiv random-float 1
@@ -207,6 +225,12 @@ to companies_action
   ask companies [
     let tmp_prod -1
     let fired [ ]
+    ;; draw current productivity in [mean - fluctuation / 2 , mean + fluctuation / 2 ]
+    let tmp_atmos ( mean_atmosphere + ( ( random-float max_atmosphere_fluctuation ) - ( max_atmosphere_fluctuation / 2 ) ) )
+    set tmp_atmos min list tmp_atmos 1
+    set tmp_atmos max list tmp_atmos 0
+    set current_atmosphere tmp_atmos
+
     ;;evaluate each employee productivity
     foreach worker_list [
       x -> let employee_id x
@@ -378,11 +402,29 @@ to fire [ employee_id ]
   ]
 end
 
+;;quit company
+to quit [ worker_id company_id ]
+  set nb_quitted nb_quitted + 1
+  ask company company_id [
+    set worker_list remove worker_id worker_list
+  ]
+  add_a_job_offer company_id
+  ask worker worker_id
+  [
+    set color white
+  ]
+
+
+end
+
+
 to values_update
   ifelse ( L - U ) = 0 [ set  fire_rate 0 ] [ set fire_rate ( nb_fired / ( L - U ) ) ]
+  ifelse ( L - U ) = 0 [ set  quit_rate 0 ] [ set quit_rate ( nb_quitted / ( L - U ) ) ]
   ifelse ( U = 0 ) [set hire_rate 0 ] [set hire_rate ( nb_hired / U )]
   set nb_fired 0
   set nb_hired 0
+  set nb_quitted 0
   ask the_matching_agent [
     set U length worker_list
     set V length company_hiring_list
@@ -559,9 +601,9 @@ HORIZONTAL
 
 SLIDER
 0
-533
+617
 207
-566
+650
 firing_treshold
 firing_treshold
 0
@@ -574,9 +616,9 @@ HORIZONTAL
 
 SLIDER
 1
-583
+667
 207
-616
+700
 unexpected_firing
 unexpected_firing
 0
@@ -604,9 +646,9 @@ HORIZONTAL
 
 SLIDER
 0
-485
+569
 208
-518
+602
 unexpected_company_motivation
 unexpected_company_motivation
 0
@@ -659,9 +701,9 @@ Global
 
 TEXTBOX
 47
-452
+536
 153
-477
+561
 Companies
 20
 0.0
@@ -786,7 +828,7 @@ matches_by_round
 matches_by_round
 0
 100
-1.0
+10.0
 1
 1
 match/iteration
@@ -894,7 +936,7 @@ PLOT
 208
 806
 409
-Fire & hire rates
+Fire, quit & hire rates
 ticks
 rates
 0.0
@@ -907,6 +949,7 @@ true
 PENS
 "hire rate" 1.0 0 -2674135 true "" "plot hire_rate"
 "fire rate" 1.0 0 -13345367 true "" "plot fire_rate"
+"quit rate" 1.0 0 -13840069 true "" "plot quit_rate"
 
 SWITCH
 319
@@ -948,6 +991,51 @@ TEXTBOX
 15
 0.0
 1
+
+SLIDER
+0
+715
+207
+748
+max_atmosphere_fluctuation
+max_atmosphere_fluctuation
+0
+1
+0.3
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+0
+458
+209
+491
+quitting_treshold
+quitting_treshold
+0
+1
+0.5
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+0
+504
+207
+537
+unexpected_quitting
+unexpected_quitting
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1291,7 +1379,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
