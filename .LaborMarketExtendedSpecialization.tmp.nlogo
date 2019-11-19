@@ -1,7 +1,7 @@
 ;;Global : U_init, V_init, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
 ;;         display_links, max_salary_difference, salary mean, sqrt_nb_locations, matches_by_round
 
-globals [  nb_value_conv world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L nb_companies u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating
+globals [  nb_value_conv world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating
   nb_fired nb_hired nb_quitted fire_rate hire_rate quit_rate]
 
 ;;workers
@@ -10,7 +10,7 @@ workers-own [ location salary skills mean_productivity current_productivity unex
 
 ;;companies
 breed [ companies company ]
-companies-own [ location salary skills unexpected_motivation worker_list mean_atmosphere current_atmosphere ]
+companies-own [ location salary skills unexpected_motivation worker_list mean_atmosphere current_atmosphere main_skill capacity ]
 
 ;;matching agent
 breed [ matching_agents matching_agent ]
@@ -27,7 +27,7 @@ to setup
   set v_at_conv tmp_v
   beveridge_update
   set last_display_links display_links
-  set color_set [ 15 25 35 45 55 65 75 85 95 105 115 125 135 17 27 37 47 57 67 77 87 97 107 117 127 137 ]
+  set color_set [ red blue yellow ]
 
   ;;global variables
   set world_width 100
@@ -39,7 +39,6 @@ to setup
   set L U_init
   set u_rate U / L
   set v_rate V / L
-  set nb_companies V
   ;;last values, used for convergence
   set U_last_values [ ]
   set V_last_values [ ]
@@ -87,7 +86,10 @@ to setup
     set location sqrt_nb_locations * floor ( y  / ( world_height / sqrt_nb_locations ) ) + ceiling ( x / ( world_width / sqrt_nb_locations ) )
 
     ;;skills
-    set skills ( list random 2 random 2 random 2 random 2 random 2 )
+    let tmp_main_skill random 3
+    set skills ( list 0 0 0 random 2 random 2 )
+    set skills replace-item tmp_main_skill skills 1
+    show skills
 
     ;;salary
     let tmp_salary ( salary_mean - max_salary_difference / 2 + ( random max_salary_difference ) )
@@ -105,12 +107,29 @@ to setup
     register_as_job_seeker id
   ]
 
+   ;;jobs distribution
+  let job_distrib [ ]
+  while [ ( length job_distrib ) < ( nb_companies - 1 ) ]
+  [
+    let val -1
+    while [ val < 0 or member? val job_distrib ]
+    [
+      set val ( random V_init - 2 ) + 1
+    ]
+    set job_distrib insert-item 0 job_distrib val
+  ]
+  set job_distrib sort job_distrib
+  set job_distrib insert-item 0 job_distrib 0
+  set job_distrib insert-item ( length job_distrib ) job_distrib ( V_init - 1 )
+
+
   ;;companies init
   let i 1
+  let j 0
   create-companies nb_companies
   [
     ;;genral
-    set color item ( i mod ( length color_set ) ) color_set
+
     set shape "house"
     set worker_list [ ]
     set unexpected_motivation false
@@ -122,7 +141,11 @@ to setup
     set location sqrt_nb_locations * floor ( y  / ( world_height / sqrt_nb_locations ) ) + ceiling ( x / ( world_width / sqrt_nb_locations ) )
 
     ;;skills
-    set skills ( list random 2 random 2 random 2 random 2 random 2 )
+    set main_skill random 3
+    set skills ( list 0 0 0 random 2 random 2 )
+    set skills replace-item main_skill skills 1
+
+
 
     ;;salary
     let val ( salary_mean - max_salary_difference / 2 + ( random max_salary_difference ) )
@@ -132,12 +155,21 @@ to setup
     ;;mean atmosphere
     set mean_atmosphere random-float 1
 
-    ;;send job offer to the matching agents
-    add_a_job_offer who
+    ;;send job offers to the matching agents
+    let id who
+    let tmp_nb_job ( item i job_distrib ) - ( item ( i - 1 ) job_distrib )
+    set capacity tmp_nb_job
+    while [ j < ( item i job_distrib ) ]
+    [
+      add_a_job_offer id
+      set j j + 1
+    ]
+    set i i + 1
 
     ;;set size depending on job number
-    set size 3
-    set i i + 1
+    set size 3 + 15 * tmp_nb_job / V_init
+    let tmp_col item ( main_skill ) color_set
+    set color scale-color tmp_col 0 ( 0 - ( capacity / 10 ) ) capacity
   ]
 
 end
@@ -204,7 +236,7 @@ to workers_action
       ;; if amtmosphere too low or unexpected quit, quit
       if tmp_atmos < quitting_treshold or unexp_quit < unexpected_quitting [
         quit who employer
-
+        set employer -1
         register_as_job_seeker who
         ;;show ( word "fired " employee_id  " prod : " tmp_prod )
       ]
@@ -373,17 +405,18 @@ end
 ;;hiring worker in company
 to hire [ worker_id company_id ]
   set nb_hired nb_hired + 1
-  let company_col red
+  let  red
   ask company company_id [
     set worker_list insert-item 0 worker_list worker_id
-    set company_col color
+    set company_skill main_skill
   ]
 
   ask worker worker_id
   [
     set employer company_id
-    set color company_col
-    if display_links [ create-link-to company employer [ set color company_col ] ]
+    let tmp_col item ( company_skill ) color_set
+    set color tmp_col
+    if display_links [ create-link-to company employer [ set color tmp_col ] ]
   ]
 
 
@@ -412,6 +445,9 @@ to quit [ worker_id company_id ]
   ask worker worker_id
   [
     set color white
+    ask my-links [
+      die
+    ]
   ]
 
 
@@ -504,6 +540,12 @@ to graphic_update
     ]
     set last_display_links display_links
   ]
+
+  ;;company colors
+  ask companies[
+    let tmp_col item ( main_skill ) color_set
+    set color scale-color tmp_col ( length worker_list ) ( 0 - ( capacity / 10 ) ) capacity
+  ]
 end
 
 to plot_curve
@@ -563,7 +605,7 @@ U_init
 U_init
 100
 400
-400.0
+200.0
 100
 1
 unemployed
@@ -1033,6 +1075,21 @@ unexpected_quitting
 1
 0.1
 0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+0
+762
+208
+795
+nb_companies
+nb_companies
+1
+100
+22.0
+1
 1
 NIL
 HORIZONTAL

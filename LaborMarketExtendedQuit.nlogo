@@ -412,6 +412,9 @@ to quit [ worker_id company_id ]
   ask worker worker_id
   [
     set color white
+    ask my-links [
+      die
+    ]
   ]
 
 
