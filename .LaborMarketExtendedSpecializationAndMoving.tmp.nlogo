@@ -1,12 +1,12 @@
 ;;Global : U_init, V_init, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
 ;;         display_links, max_salary_difference, salary mean, sqrt_nb_locations, matches_by_round
 
-globals [  nb_value_conv world_width world_height world_max_dist minimal_salary the_matching_agent last_display_links color_set U V L u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating
-  nb_fired nb_hired nb_quitted fire_rate hire_rate quit_rate worker_shapes]
+globals [  nb_value_conv world_width world_height world_max_dist minimal_salary the_matching_agent last_display_links  color_set U V L u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating
+  nb_fired nb_hired nb_quitted fire_rate hire_rate quit_rate worker_shapes different_domain_rate different_domain_tot nb_moving_company nb_moving_worker ]
 
 ;;workers
 breed [ workers worker ]
-workers-own [ location salary skills mean_productivity current_productivity unexpected_motivation employer nb_fail ]
+workers-own [ location salary skills mean_productivity current_productivity unexpected_motivation employer main_skill nb_fail working_diff_domain ]
 
 ;;companies
 breed [ companies company ]
@@ -18,6 +18,7 @@ matching_agents-own [ worker_list company_hiring_list ]
 
 ;;set up the environment
 to setup
+
   let tmp_u u_at_conv
   let tmp_v v_at_conv
   clear-all
@@ -27,6 +28,7 @@ to setup
   set v_at_conv tmp_v
   beveridge_update
   set last_display_links display_links
+
   set color_set [ red blue yellow ]
   set worker_shapes [ "person business" "person graduate" "person farmer" ]
 
@@ -49,6 +51,10 @@ to setup
   set nb_fired 0
   set fire_rate 0
   set hire_rate 0
+  set different_domain_tot 0
+  set different_domain_rate 0
+  set nb_moving_company 0
+  set nb_moving_worker 0
 
   if u_at_conv = 0 and v_at_conv = 0 [
     set u_at_conv []
@@ -57,9 +63,9 @@ to setup
 
   ;;locations and links coloration
   ask patches [
-    let  col ceiling ( ( pycor + 1 )  / ( world_height / sqrt_nb_locations ) )
-    let line ceiling ( ( pxcor + 1 ) / ( world_width / sqrt_nb_locations ) )
-    if ( line + col ) mod 2 = 0 [ set pcolor grey ]
+    ;;let  col ceiling ( ( pycor + 1 )  / ( world_height / sqrt_nb_locations ) )
+    ;;let line ceiling ( ( pxcor + 1 ) / ( world_width / sqrt_nb_locations ) )
+    ;;if ( line + col ) mod 2 = 0 [ set pcolor grey ]
 
   ]
 
@@ -92,6 +98,7 @@ to setup
     set skills ( list 0 0 0 random 2 random 2 )
     set skills replace-item tmp_main_skill skills 1
     set shape item tmp_main_skill worker_shapes
+    set main_skill tmp_main_skill
 
 
     ;;salary
@@ -112,6 +119,9 @@ to setup
 
     ;;nb_fail
     set nb_fail 0
+
+    ;;
+    set working_diff_domain false
   ]
 
    ;;jobs distribution
@@ -182,7 +192,9 @@ to setup
     ;;nb_fail
     set nb_fail 0
   ]
-
+  if display_map [
+    import-drawing "paris.jpg"
+  ]
 end
 
 ;;iteration of the simulation, can be see as day, week...
@@ -433,9 +445,19 @@ to-report calculate_score [ worker_id company_id ]
 
   ;;calculate skills score
   let i 0
+  let same_domain true
   while [ i < 5 ][
-    if item i worker_skills = item i company_skills [ set skills_score skills_score + 0.2 ]
+    ifelse i < 3 [
+      if not ( item i worker_skills = item i company_skills ) [ set same_domain false ]
+    ]
+    [
+      if item i worker_skills = item i company_skills [ set skills_score skills_score + 0.1 ]
+    ]
+
     set i i + 1
+  ]
+  if same_domain [
+    set skills_score skills_score + 0.8
   ]
 
   ;;calculate salary score
@@ -451,6 +473,7 @@ end
 to hire [ worker_id company_id ]
   set nb_hired nb_hired + 1
   let company_skill -1
+  let worker_skill -1
   ask company company_id [
     set worker_list insert-item 0 worker_list worker_id
     set company_skill main_skill
@@ -460,10 +483,16 @@ to hire [ worker_id company_id ]
   [
     set employer company_id
     set nb_fail 0
+    set worker_skill main_skill
     let tmp_col item ( company_skill ) color_set
     set color tmp_col
     if display_links [ create-link-to company employer [ set color tmp_col ] ]
+    if not ( worker_skill = company_skill ) [
+      set different_domain_tot different_domain_tot + 1
+      set working_diff_domain true
+    ]
   ]
+
 
 
 end
@@ -471,12 +500,18 @@ end
 ;;notice the employee on firing
 to fire [ employee_id ]
   set nb_fired nb_fired + 1
+  let company_skill -1
+  let worker_skill -1
   ask worker employee_id [
     set color white
     set employer -1
     register_as_job_seeker who
     ask my-links [
       die
+    ]
+    if working_diff_domain [
+      set working_diff_domain false
+      set different_domain_tot different_domain_tot - 1
     ]
   ]
 end
@@ -493,6 +528,10 @@ to quit [ worker_id company_id ]
     set color white
     ask my-links [
       die
+    ]
+    if working_diff_domain [
+      set working_diff_domain false
+      set different_domain_tot different_domain_tot - 1
     ]
   ]
 
@@ -523,6 +562,7 @@ to values_update
       set V_last_values remove-item ( (length V_last_values) - 1 ) V_last_values
     ]
   ]
+  set different_domain_rate different_domain_tot / ( L - U )
 end
 
 
@@ -564,6 +604,7 @@ to worker_move [ id ]
   ask worker id [
     setxy  random world_width random world_height
   ]
+  set nb_moving_worker nb_moving_worker + 1
   ;;show ( word "moved " id )
 end
 
@@ -586,6 +627,7 @@ to company_move [ id ]
 
     ]
   ]
+  set nb_moving_company nb_moving_company + 1
 end
 
 ;;executed at each iteration for graphic purposes
@@ -644,13 +686,13 @@ to reset_curve
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-829
-58
-1368
-598
+543
+10
+1293
+761
 -1
 -1
-5.31
+7.42
 1
 10
 1
@@ -716,10 +758,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-513
-255
-720
-288
+1
+466
+208
+499
 firing_treshold
 firing_treshold
 0
@@ -731,10 +773,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-514
-305
-720
-338
+2
+516
+208
+549
 unexpected_firing
 unexpected_firing
 0
@@ -746,25 +788,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-258
-255
-467
-288
+248
+553
+457
+586
 max_product_fluctuation
 max_product_fluctuation
 0
 1
-0.15
+0.18
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-513
-207
-721
-240
+1
+418
+209
+451
 unexpected_company_motivation
 unexpected_company_motivation
 0
@@ -776,10 +818,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-258
-206
-466
-239
+248
+504
+456
+537
 unexpected_worker_motivation
 unexpected_worker_motivation
 0
@@ -816,20 +858,20 @@ Global
 1
 
 TEXTBOX
-560
-174
-666
-199
+48
+385
+154
+410
 Companies
 20
 0.0
 1
 
 TEXTBOX
-318
-177
-392
-202
+308
+475
+382
+500
 Workers\n
 20
 0.0
@@ -846,10 +888,10 @@ Matching Agent\n
 1
 
 BUTTON
-505
-46
-571
-79
+261
+218
+327
+251
 Setup
 setup
 NIL
@@ -863,10 +905,10 @@ NIL
 1
 
 BUTTON
-643
-47
-709
-80
+399
+219
+465
+252
 Run
 simulate
 T
@@ -923,7 +965,7 @@ HORIZONTAL
 SLIDER
 158
 43
-355
+309
 76
 max_salary_difference
 max_salary_difference
@@ -951,10 +993,10 @@ match/iteration
 HORIZONTAL
 
 PLOT
-588
-620
-878
-821
+1695
+433
+1985
+634
 u & v through time
 ticks
 person & job offers
@@ -970,10 +1012,10 @@ PENS
 "v" 1.0 0 -2674135 true "" "plot v_rate"
 
 PLOT
-294
-620
-584
-821
+1695
+220
+1985
+421
 Beveridge Curve
 u
 v
@@ -1003,9 +1045,9 @@ NIL
 HORIZONTAL
 
 MONITOR
-830
+1304
 10
-1131
+1605
 55
 State :
 state_description
@@ -1014,10 +1056,10 @@ state_description
 11
 
 BUTTON
-641
-138
-715
-171
+397
+310
+471
+343
 Reset curve
 reset_curve
 NIL
@@ -1031,10 +1073,10 @@ NIL
 1
 
 BUTTON
-508
-137
-627
-170
+264
+309
+383
+342
 NIL
 get_beveridge_curve
 NIL
@@ -1048,10 +1090,10 @@ NIL
 1
 
 PLOT
-0
-619
-289
-820
+1306
+529
+1679
+730
 Fire, quit & hire rates
 ticks
 rates
@@ -1074,45 +1116,45 @@ SWITCH
 162
 stop_on_conv
 stop_on_conv
-1
+0
 1
 -1000
 
 TEXTBOX
-550
-10
-700
-35
+306
+182
+456
+207
 Single iteration
 20
 0.0
 1
 
 TEXTBOX
-497
-93
-727
-122
+253
+265
+483
+294
 To get Bevereridge curve 
 20
 0.0
 1
 
 TEXTBOX
-511
-116
-702
-134
+267
+288
+458
+306
 (stop_on_conv must be on)
 15
 0.0
 1
 
 SLIDER
-513
-353
-720
-386
+1
+564
+208
+597
 max_atmosphere_fluctuation
 max_atmosphere_fluctuation
 0
@@ -1124,10 +1166,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-258
-302
-467
-335
+248
+600
+457
+633
 quitting_treshold
 quitting_treshold
 0
@@ -1139,10 +1181,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-258
-348
-465
-381
+248
+646
+455
+679
 unexpected_quitting
 unexpected_quitting
 0
@@ -1154,10 +1196,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-513
-400
-721
-433
+1
+611
+209
+644
 nb_companies
 nb_companies
 1
@@ -1169,10 +1211,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-258
-397
-466
-430
+248
+695
+456
+728
 worker_max_fail
 worker_max_fail
 1
@@ -1184,10 +1226,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-513
-445
-723
-478
+1
+656
+211
+689
 company_max_fail
 company_max_fail
 0
@@ -1199,10 +1241,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-512
-485
-722
-518
+0
+696
+210
+729
 min_capacity_prop
 min_capacity_prop
 0
@@ -1227,6 +1269,64 @@ max_dist
 1
 NIL
 HORIZONTAL
+
+SWITCH
+249
+427
+431
+460
+display_map
+display_map
+0
+1
+-1000
+
+TEXTBOX
+273
+351
+440
+412
+  Switch on and setup \n    for an amazingly \n immersive experience
+17
+0.0
+1
+
+PLOT
+1305
+308
+1678
+519
+total number of moving workers and companies
+ticks
+total number
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"companies" 1.0 0 -13345367 true "" "plot nb_moving_company"
+"workers" 1.0 0 -13840069 true "" "plot nb_moving_worker"
+
+PLOT
+1304
+67
+1680
+301
+wrong employement rate
+tick
+rate
+0.0
+1.0
+0.0
+0.1
+true
+false
+"" ""
+PENS
+"wrong employement rate" 1.0 0 -5825686 true "" "plot different_domain_rate"
 
 @#$#@#$#@
 ## WHAT IS IT?
