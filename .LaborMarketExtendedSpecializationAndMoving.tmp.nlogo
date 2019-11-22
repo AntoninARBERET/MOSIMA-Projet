@@ -562,6 +562,7 @@ to values_update
       set V_last_values remove-item ( (length V_last_values) - 1 ) V_last_values
     ]
   ]
+
   set different_domain_rate different_domain_tot / ( L - U )
 end
 
@@ -686,9 +687,9 @@ to reset_curve
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-543
+509
 10
-1293
+1259
 761
 -1
 -1
@@ -721,7 +722,7 @@ U_init
 U_init
 100
 400
-400.0
+300.0
 100
 1
 unemployed
@@ -736,7 +737,7 @@ V_init
 V_init
 100
 400
-400.0
+100.0
 100
 1
 vacancy
@@ -993,9 +994,9 @@ match/iteration
 HORIZONTAL
 
 PLOT
-1695
+1661
 433
-1985
+1951
 634
 u & v through time
 ticks
@@ -1012,9 +1013,9 @@ PENS
 "v" 1.0 0 -2674135 true "" "plot v_rate"
 
 PLOT
-1695
+1661
 220
-1985
+1951
 421
 Beveridge Curve
 u
@@ -1045,9 +1046,9 @@ NIL
 HORIZONTAL
 
 MONITOR
-1304
+1270
 10
-1605
+1571
 55
 State :
 state_description
@@ -1090,9 +1091,9 @@ NIL
 1
 
 PLOT
-1306
+1272
 529
-1679
+1645
 730
 Fire, quit & hire rates
 ticks
@@ -1121,10 +1122,10 @@ stop_on_conv
 -1000
 
 TEXTBOX
-306
-182
-456
-207
+297
+180
+447
+205
 Single iteration
 20
 0.0
@@ -1273,28 +1274,28 @@ HORIZONTAL
 SWITCH
 249
 427
-431
+456
 460
 display_map
 display_map
-0
+1
 1
 -1000
 
 TEXTBOX
-273
-351
-440
-412
+272
+359
+439
+420
   Switch on and setup \n    for an amazingly \n immersive experience
 17
 0.0
 1
 
 PLOT
-1305
+1271
 308
-1678
+1644
 519
 total number of moving workers and companies
 ticks
@@ -1311,9 +1312,9 @@ PENS
 "workers" 1.0 0 -13840069 true "" "plot nb_moving_worker"
 
 PLOT
-1304
+1270
 67
-1680
+1646
 301
 wrong employement rate
 tick

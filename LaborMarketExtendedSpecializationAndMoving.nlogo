@@ -562,7 +562,13 @@ to values_update
       set V_last_values remove-item ( (length V_last_values) - 1 ) V_last_values
     ]
   ]
-  set different_domain_rate different_domain_tot / ( L - U )
+  ifelse ( L - U ) = 0 [
+    set different_domain_rate 0
+  ]
+  [
+    set different_domain_rate different_domain_tot / ( L - U )
+  ]
+
 end
 
 
@@ -721,7 +727,7 @@ U_init
 U_init
 100
 400
-400.0
+300.0
 100
 1
 unemployed
@@ -736,7 +742,7 @@ V_init
 V_init
 100
 400
-400.0
+100.0
 100
 1
 vacancy
