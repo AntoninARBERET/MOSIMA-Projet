@@ -1,16 +1,16 @@
 ;;Global : U_init, V_init, unexpected_company_motivation, firing_treshold, unexpected_firing, unexpected_worker_motivation, max_product_fluctuation, quality_treshold, exceptional_matching_bonus, nb_companies
 ;;         display_links, max_salary_difference, salary mean, sqrt_nb_locations, matches_by_round
 
-globals [  nb_value_conv world_width world_height minimal_salary the_matching_agent last_display_links color_set U V L u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating
-  nb_fired nb_hired nb_quitted fire_rate hire_rate quit_rate]
+globals [  nb_value_conv world_width world_height world_max_dist minimal_salary the_matching_agent last_display_links color_set U V L u_rate v_rate V_last_values U_last_values state_description u_at_conv v_at_conv is_simulating
+  nb_fired nb_hired nb_quitted fire_rate hire_rate quit_rate worker_shapes]
 
 ;;workers
 breed [ workers worker ]
-workers-own [ location salary skills mean_productivity current_productivity unexpected_motivation employer ]
+workers-own [ location salary skills mean_productivity current_productivity unexpected_motivation employer nb_fail ]
 
 ;;companies
 breed [ companies company ]
-companies-own [ location salary skills unexpected_motivation worker_list mean_atmosphere current_atmosphere main_skill capacity ]
+companies-own [ location salary skills unexpected_motivation worker_list mean_atmosphere current_atmosphere main_skill capacity nb_fail ]
 
 ;;matching agent
 breed [ matching_agents matching_agent ]
@@ -28,10 +28,12 @@ to setup
   beveridge_update
   set last_display_links display_links
   set color_set [ red blue yellow ]
+  set worker_shapes [ "person business" "person graduate" "person farmer" ]
 
   ;;global variables
   set world_width 100
   set world_height 100
+  set world_max_dist ( sqrt ( world_width ^ 2 + world_height ^ 2 ) ) / 2
   set minimal_salary 1171
   set matches_by_round 10
   set U U_init
@@ -89,6 +91,8 @@ to setup
     let tmp_main_skill random 3
     set skills ( list 0 0 0 random 2 random 2 )
     set skills replace-item tmp_main_skill skills 1
+    set shape item tmp_main_skill worker_shapes
+
 
     ;;salary
     let tmp_salary ( salary_mean - max_salary_difference / 2 + ( random max_salary_difference ) )
@@ -104,6 +108,10 @@ to setup
     ;;register as job seeker to the matching agent
     let id who
     register_as_job_seeker id
+
+
+    ;;nb_fail
+    set nb_fail 0
   ]
 
    ;;jobs distribution
@@ -111,7 +119,7 @@ to setup
   while [ ( length job_distrib ) < ( nb_companies - 1 ) ]
   [
     let val -1
-    while [ val < 0 or member? val job_distrib ]
+    while [ val <= 0 or member? val job_distrib ]
     [
       set val ( random V_init - 2 ) + 1
     ]
@@ -158,6 +166,7 @@ to setup
     let id who
     let tmp_nb_job ( item i job_distrib ) - ( item ( i - 1 ) job_distrib )
     set capacity tmp_nb_job
+    ;;show capacity
     while [ j < ( item i job_distrib ) ]
     [
       add_a_job_offer id
@@ -168,7 +177,10 @@ to setup
     ;;set size depending on job number
     set size 3 + 15 * tmp_nb_job / V_init
     let tmp_col item ( main_skill ) color_set
-    set color scale-color tmp_col 0 ( 0 - ( capacity / 10 ) ) capacity
+    set color scale-color tmp_col 0 ( 0 - ( capacity / 5 ) ) ( capacity  + ( capacity / 2))
+
+    ;;nb_fail
+    set nb_fail 0
   ]
 
 end
@@ -243,6 +255,12 @@ to workers_action
     ]
     ;;unemployed
     [
+      ;;move if needed
+      if nb_fail > worker_max_fail
+      [
+        worker_move who
+        set nb_fail 0
+      ]
       ;;unexpected motivation this iteration
       let unexp_motiv random-float 1
       ifelse unexp_motiv < unexpected_worker_motivation [ set unexpected_motivation true ] [ set unexpected_motivation false ]
@@ -287,7 +305,21 @@ to companies_action
     ;;unexpected motivation this iteration
     let unexp_motiv random-float 1
       ifelse unexp_motiv < unexpected_company_motivation [ set unexpected_motivation true ] [ set unexpected_motivation false ]
+
+    ;;check if enough employee work here
+    ifelse ( ( length worker_list ) / capacity ) > min_capacity_prop
+    [
+      set nb_fail 0
+    ]
+    [
+      if nb_fail >= company_max_fail [
+        company_move who
+        set nb_fail 0
+      ]
+    ]
   ]
+
+
 end
 
 ;;matching agent on an iteration
@@ -326,12 +358,20 @@ to match
 
 
   ;;if score is good enough, hire and remove form lists
-  if score > quality_treshold [
+  ifelse score > quality_treshold [
     hire worker_id company_id
     ask the_matching_agent
     [
       set worker_list remove-item worker_list_ind worker_list
       set company_hiring_list remove-item company_list_ind company_hiring_list
+    ]
+  ]
+  [
+    ask worker worker_id [
+      set nb_fail nb_fail + 1
+    ]
+    ask company company_id [
+      set nb_fail nb_fail + 1
     ]
   ]
 
@@ -357,22 +397,26 @@ end
 ;;score calculating function
 to-report calculate_score [ worker_id company_id ]
   ;;get values
-  let worker_loc -1
+  let worker_x -1
+  let worker_y -1
   let worker_skills [ ]
   let worker_salary -1
 
-  let company_loc -1
+  let company_x -1
+  let company_y -1
   let company_skills [ ]
   let company_salary -1
 
   ask worker worker_id[
-    set worker_loc location
+    set worker_x xcor
+    set worker_y ycor
     set worker_skills skills
     set worker_salary salary
   ]
 
   ask company company_id[
-    set company_loc location
+    set company_x xcor
+    set company_y ycor
     set company_skills skills
     set company_salary salary
   ]
@@ -383,7 +427,9 @@ to-report calculate_score [ worker_id company_id ]
   let salary_score 0
 
   ;;calculate location score
-  if company_loc = worker_loc [ set dist_score 1 ]
+  let dist [ distance worker worker_id ] of company company_id
+  if dist > max_dist [ report 0 ]
+  set dist_score ( max_dist - ( dist ) / max_dist )
 
   ;;calculate skills score
   let i 0
@@ -413,6 +459,7 @@ to hire [ worker_id company_id ]
   ask worker worker_id
   [
     set employer company_id
+    set nb_fail 0
     let tmp_col item ( company_skill ) color_set
     set color tmp_col
     if display_links [ create-link-to company employer [ set color tmp_col ] ]
@@ -512,6 +559,34 @@ to-report check_conv
   [report false]
 end
 
+;;moving
+to worker_move [ id ]
+  ask worker id [
+    setxy  random world_width random world_height
+  ]
+  ;;show ( word "moved " id )
+end
+
+to company_move [ id ]
+  ask company id [
+    setxy  random world_width random world_height
+
+    ;;check if worker score is high enough for him to stay
+    foreach worker_list [
+      x -> let employee_id x
+      let tmp_score calculate_score employee_id id
+      ifelse tmp_score < quality_treshold [
+        fire employee_id
+        set worker_list remove employee_id worker_list
+        add_a_job_offer id
+        ;;show ( word employee_id " did not follow " id )
+      ]
+      [ ;;show ( word employee_id " followed " id )
+      ]
+
+    ]
+  ]
+end
 
 ;;executed at each iteration for graphic purposes
 to graphic_update
@@ -543,7 +618,7 @@ to graphic_update
   ;;company colors
   ask companies[
     let tmp_col item ( main_skill ) color_set
-    set color scale-color tmp_col ( length worker_list ) ( 0 - ( capacity / 10 ) ) capacity
+    set color scale-color tmp_col ( length worker_list ) ( 0 - ( capacity / 5 ) ) ( capacity  + ( capacity / 2))
   ]
 end
 
@@ -604,7 +679,7 @@ U_init
 U_init
 100
 400
-200.0
+400.0
 100
 1
 unemployed
@@ -634,62 +709,62 @@ quality_treshold
 quality_treshold
 0
 1
-0.5
+0.7
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-0
-617
-207
-650
+513
+255
+720
+288
 firing_treshold
 firing_treshold
 0
 1
-0.66
+0.4
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
+514
+305
+720
+338
+unexpected_firing
+unexpected_firing
+0
 1
-667
+0.0
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+258
+255
+467
+288
+max_product_fluctuation
+max_product_fluctuation
+0
+1
+0.15
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+513
 207
-700
-unexpected_firing
-unexpected_firing
-0
-1
-0.11
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-0
-411
-209
-444
-max_product_fluctuation
-max_product_fluctuation
-0
-1
-0.3
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-0
-569
-208
-602
+721
+240
 unexpected_company_motivation
 unexpected_company_motivation
 0
@@ -701,10 +776,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-0
-362
-208
-395
+258
+206
+466
+239
 unexpected_worker_motivation
 unexpected_worker_motivation
 0
@@ -741,20 +816,20 @@ Global
 1
 
 TEXTBOX
-47
-536
-153
-561
+560
+174
+666
+199
 Companies
 20
 0.0
 1
 
 TEXTBOX
-60
-333
-134
-358
+318
+177
+392
+202
 Workers\n
 20
 0.0
@@ -854,7 +929,7 @@ max_salary_difference
 max_salary_difference
 0
 2000
-400.0
+410.0
 10
 1
  €
@@ -876,10 +951,10 @@ match/iteration
 HORIZONTAL
 
 PLOT
-218
-209
-507
-410
+588
+620
+878
+821
 u & v through time
 ticks
 person & job offers
@@ -895,10 +970,10 @@ PENS
 "v" 1.0 0 -2674135 true "" "plot v_rate"
 
 PLOT
-368
-443
-794
-670
+294
+620
+584
+821
 Beveridge Curve
 u
 v
@@ -973,10 +1048,10 @@ NIL
 1
 
 PLOT
-517
-208
-806
-409
+0
+619
+289
+820
 Fire, quit & hire rates
 ticks
 rates
@@ -999,7 +1074,7 @@ SWITCH
 162
 stop_on_conv
 stop_on_conv
-0
+1
 1
 -1000
 
@@ -1034,27 +1109,102 @@ TEXTBOX
 1
 
 SLIDER
-0
-715
-207
-748
+513
+353
+720
+386
 max_atmosphere_fluctuation
 max_atmosphere_fluctuation
 0
 1
-0.29
+0.17
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
+258
+302
+467
+335
+quitting_treshold
+quitting_treshold
 0
-458
-209
-491
-quitting_treshold
-quitting_treshold
+1
+0.4
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+258
+348
+465
+381
+unexpected_quitting
+unexpected_quitting
+0
+1
+0.0
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+513
+400
+721
+433
+nb_companies
+nb_companies
+1
+V_init
+31.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+258
+397
+466
+430
+worker_max_fail
+worker_max_fail
+1
+100
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+513
+445
+723
+478
+company_max_fail
+company_max_fail
+0
+100
+12.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+512
+485
+722
+518
+min_capacity_prop
+min_capacity_prop
 0
 1
 0.5
@@ -1065,30 +1215,15 @@ HORIZONTAL
 
 SLIDER
 0
-504
+335
 207
-537
-unexpected_quitting
-unexpected_quitting
+368
+max_dist
+max_dist
 0
-1
+( sqrt ( world_width ^ 2 + world_height ^ 2 ) ) / 2
+34.6
 0.1
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-0
-762
-208
-795
-nb_companies
-nb_companies
-1
-V_init
-11.0
-1
 1
 NIL
 HORIZONTAL
@@ -1309,6 +1444,56 @@ Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300
 Rectangle -7500403 true true 127 79 172 94
 Polygon -7500403 true true 195 90 240 150 225 180 165 105
 Polygon -7500403 true true 105 90 60 150 75 180 135 105
+
+person business
+false
+0
+Rectangle -1 true false 120 90 180 180
+Polygon -13345367 true false 135 90 150 105 135 180 150 195 165 180 150 105 165 90
+Polygon -7500403 true true 120 90 105 90 60 195 90 210 116 154 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 183 153 210 210 240 195 195 90 180 90 150 165
+Circle -7500403 true true 110 5 80
+Rectangle -7500403 true true 127 76 172 91
+Line -16777216 false 172 90 161 94
+Line -16777216 false 128 90 139 94
+Polygon -13345367 true false 195 225 195 300 270 270 270 195
+Rectangle -13791810 true false 180 225 195 300
+Polygon -14835848 true false 180 226 195 226 270 196 255 196
+Polygon -13345367 true false 209 202 209 216 244 202 243 188
+Line -16777216 false 180 90 150 165
+Line -16777216 false 120 90 150 165
+
+person farmer
+false
+0
+Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 195 90
+Polygon -1 true false 60 195 90 210 114 154 120 195 180 195 187 157 210 210 240 195 195 90 165 90 150 105 150 150 135 90 105 90
+Circle -7500403 true true 110 5 80
+Rectangle -7500403 true true 127 79 172 94
+Polygon -13345367 true false 120 90 120 180 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 180 90 172 89 165 135 135 135 127 90
+Polygon -6459832 true false 116 4 113 21 71 33 71 40 109 48 117 34 144 27 180 26 188 36 224 23 222 14 178 16 167 0
+Line -16777216 false 225 90 270 90
+Line -16777216 false 225 15 225 90
+Line -16777216 false 270 15 270 90
+Line -16777216 false 247 15 247 90
+Rectangle -6459832 true false 240 90 255 300
+
+person graduate
+false
+0
+Circle -16777216 false false 39 183 20
+Polygon -1 true false 50 203 85 213 118 227 119 207 89 204 52 185
+Circle -7500403 true true 110 5 80
+Rectangle -7500403 true true 127 79 172 94
+Polygon -8630108 true false 90 19 150 37 210 19 195 4 105 4
+Polygon -8630108 true false 120 90 105 90 60 195 90 210 120 165 90 285 105 300 195 300 210 285 180 165 210 210 240 195 195 90
+Polygon -1184463 true false 135 90 120 90 150 135 180 90 165 90 150 105
+Line -2674135 false 195 90 150 135
+Line -2674135 false 105 90 150 135
+Polygon -1 true false 135 90 150 105 165 90
+Circle -1 true false 104 205 20
+Circle -1 true false 41 184 20
+Circle -16777216 false false 106 206 18
+Line -2674135 false 208 22 208 57
 
 plant
 false
