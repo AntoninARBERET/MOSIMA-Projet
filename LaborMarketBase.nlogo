@@ -660,7 +660,7 @@ Global
 TEXTBOX
 47
 452
-153
+179
 477
 Companies
 20
@@ -670,7 +670,7 @@ Companies
 TEXTBOX
 60
 333
-134
+162
 358
 Workers\n
 20
@@ -786,7 +786,7 @@ matches_by_round
 matches_by_round
 0
 100
-1.0
+10.0
 1
 1
 match/iteration
@@ -838,7 +838,7 @@ epsilon_conv
 epsilon_conv
 0
 1
-0.007
+0.001
 0.001
 1
 NIL
@@ -930,9 +930,9 @@ Single iteration
 1
 
 TEXTBOX
-497
+495
 93
-727
+748
 122
 To get Bevereridge curve 
 20
@@ -942,7 +942,7 @@ To get Bevereridge curve
 TEXTBOX
 511
 116
-702
+743
 134
 (stop_on_conv must be on)
 15

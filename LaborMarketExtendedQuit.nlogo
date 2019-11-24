@@ -705,7 +705,7 @@ Global
 TEXTBOX
 47
 536
-153
+183
 561
 Companies
 20
@@ -715,7 +715,7 @@ Companies
 TEXTBOX
 60
 333
-134
+157
 358
 Workers\n
 20
@@ -810,7 +810,7 @@ HORIZONTAL
 SLIDER
 158
 43
-355
+311
 76
 max_salary_difference
 max_salary_difference
@@ -883,7 +883,7 @@ epsilon_conv
 epsilon_conv
 0
 1
-0.007
+0.001
 0.001
 1
 NIL
@@ -976,10 +976,10 @@ Single iteration
 1
 
 TEXTBOX
-497
-93
-727
-122
+519
+91
+749
+120
 To get Bevereridge curve 
 20
 0.0
@@ -988,7 +988,7 @@ To get Bevereridge curve
 TEXTBOX
 511
 116
-702
+717
 134
 (stop_on_conv must be on)
 15
@@ -1382,7 +1382,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.1
+NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@

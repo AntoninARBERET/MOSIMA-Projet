@@ -359,7 +359,7 @@ to match
   ]
 
   ;;get score
-  if not ( company_id = -1 or worker_id = -1 )[
+  if not ( ( company_id = -1 ) or ( worker_id = -1 ) )[
     set score calculate_score worker_id company_id
 
     ;;get bonuses if unecpected motivation
@@ -379,6 +379,7 @@ to match
     ]
   ]
   [
+    ;;show worker_id
     ask worker worker_id [
       set nb_fail nb_fail + 1
     ]
@@ -408,6 +409,7 @@ end
 
 ;;score calculating function
 to-report calculate_score [ worker_id company_id ]
+  ;;show ( word "------- SCORE OF WORKER " worker_id " & COMPANY " company_id )
   ;;get values
   let worker_x -1
   let worker_y -1
@@ -440,8 +442,13 @@ to-report calculate_score [ worker_id company_id ]
 
   ;;calculate location score
   let dist [ distance worker worker_id ] of company company_id
-  if dist > max_dist [ report 0 ]
-  set dist_score ( max_dist - ( dist ) / max_dist )
+  if dist > max_dist [
+    ;;show ( word "pos : worker " worker_id " - > " worker_x "; " worker_y "  company " company_id " - > "  company_x "; " company_y " TOO FAR")
+    report 0
+  ]
+  set dist_score ( ( max_dist -  dist ) / max_dist )
+
+  ;;show ( word "pos : worker " worker_id " - > " worker_x "; " worker_y "  company " company_id " - > "  company_x "; " company_y " score = " dist_score)
 
   ;;calculate skills score
   let i 0
@@ -460,11 +467,17 @@ to-report calculate_score [ worker_id company_id ]
     set skills_score skills_score + 0.8
   ]
 
+  ;;show ( word "skills : worker " worker_id " - > "worker_skills "  company " company_id " - > "  worker_skills " score = " skills_score)
+
   ;;calculate salary score
   let tmp_sal_score ( 1 - ( ( worker_salary - company_salary ) /  max list worker_salary company_salary  ) )
   set salary_score min list 1 tmp_sal_score
 
+  ;;show ( word "salary : worker " worker_id " - > "worker_salary "  company " company_id " - > "  company_salary " score = " salary_score)
+
   ;;aggregate
+
+  ;;show ( word "Total = " ( ( dist_score + skills_score + salary_score ) / 3 ) )
   report ( dist_score + skills_score + salary_score ) / 3
 
 end
@@ -694,11 +707,11 @@ end
 GRAPHICS-WINDOW
 509
 10
-1259
-761
+1226
+728
 -1
 -1
-7.42
+7.09
 1
 10
 1
@@ -727,7 +740,7 @@ U_init
 U_init
 100
 400
-300.0
+100.0
 100
 1
 unemployed
@@ -757,7 +770,7 @@ quality_treshold
 quality_treshold
 0
 1
-0.7
+0.6
 0.01
 1
 NIL
@@ -772,7 +785,7 @@ firing_treshold
 firing_treshold
 0
 1
-0.4
+0.1
 0.01
 1
 NIL
@@ -802,7 +815,7 @@ max_product_fluctuation
 max_product_fluctuation
 0
 1
-0.18
+1.0
 0.01
 1
 NIL
@@ -832,7 +845,7 @@ unexpected_worker_motivation
 unexpected_worker_motivation
 0
 1
-0.1
+0.2
 0.01
 1
 NIL
@@ -866,7 +879,7 @@ Global
 TEXTBOX
 48
 385
-154
+193
 410
 Companies
 20
@@ -876,7 +889,7 @@ Companies
 TEXTBOX
 308
 475
-382
+413
 500
 Workers\n
 20
@@ -962,7 +975,7 @@ salary_mean
 salary_mean
 1171
 5000
-2009.0
+2000.0
 1
 1
 €
@@ -977,7 +990,7 @@ max_salary_difference
 max_salary_difference
 0
 2000
-410.0
+400.0
 10
 1
  €
@@ -999,9 +1012,9 @@ match/iteration
 HORIZONTAL
 
 PLOT
-1661
+1628
 433
-1951
+1918
 634
 u & v through time
 ticks
@@ -1018,9 +1031,9 @@ PENS
 "v" 1.0 0 -2674135 true "" "plot v_rate"
 
 PLOT
-1661
+1628
 220
-1951
+1918
 421
 Beveridge Curve
 u
@@ -1044,16 +1057,16 @@ epsilon_conv
 epsilon_conv
 0
 1
-0.007
+0.001
 0.001
 1
 NIL
 HORIZONTAL
 
 MONITOR
-1270
+1237
 10
-1571
+1538
 55
 State :
 state_description
@@ -1096,9 +1109,9 @@ NIL
 1
 
 PLOT
-1272
+1239
 529
-1645
+1612
 730
 Fire, quit & hire rates
 ticks
@@ -1122,14 +1135,14 @@ SWITCH
 162
 stop_on_conv
 stop_on_conv
-0
+1
 1
 -1000
 
 TEXTBOX
 297
 180
-447
+488
 205
 Single iteration
 20
@@ -1139,7 +1152,7 @@ Single iteration
 TEXTBOX
 253
 265
-483
+503
 294
 To get Bevereridge curve 
 20
@@ -1149,7 +1162,7 @@ To get Bevereridge curve
 TEXTBOX
 267
 288
-458
+489
 306
 (stop_on_conv must be on)
 15
@@ -1165,7 +1178,7 @@ max_atmosphere_fluctuation
 max_atmosphere_fluctuation
 0
 1
-0.17
+0.2
 0.01
 1
 NIL
@@ -1225,7 +1238,7 @@ worker_max_fail
 worker_max_fail
 1
 100
-5.0
+10.0
 1
 1
 NIL
@@ -1239,8 +1252,8 @@ SLIDER
 company_max_fail
 company_max_fail
 0
-100
-12.0
+10000
+2000.0
 1
 1
 NIL
@@ -1270,7 +1283,7 @@ max_dist
 max_dist
 0
 ( sqrt ( world_width ^ 2 + world_height ^ 2 ) ) / 2
-34.6
+30.0
 0.1
 1
 NIL
@@ -1288,19 +1301,19 @@ display_map
 -1000
 
 TEXTBOX
-272
-359
-439
-420
-  Switch on and setup \n    for an amazingly \n immersive experience
+282
+364
+479
+442
+Switch on and setup \nfor an amazingly \nimmersive experience
 17
 0.0
 1
 
 PLOT
-1271
+1238
 308
-1644
+1611
 519
 total number of moving workers and companies
 ticks
@@ -1317,9 +1330,9 @@ PENS
 "workers" 1.0 0 -13840069 true "" "plot nb_moving_worker"
 
 PLOT
-1270
+1237
 67
-1646
+1613
 301
 wrong employement rate
 tick
@@ -1726,7 +1739,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.1
+NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
